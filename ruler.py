@@ -1,10 +1,10 @@
 import debug
-from rules_core.implication import implication, test_implication
+from rules_core.implication import implication, test_implication, introduce_implication
 from rules_core.negation import negation, test_negation
 from typing import Callable, TYPE_CHECKING
 if TYPE_CHECKING:
-    from parse import Parser
     from tokens import Token, TokenState
+    from solve import Solver, Premise
 
 """
     A rule function takes the premise (str) as argument
@@ -15,6 +15,7 @@ rules = {
     "->": implication,
     "!": negation
 }
+eliminate = rules
 
 tests = {
     "->": test_implication,
@@ -22,6 +23,10 @@ tests = {
 }
 
 operators = ["\^", "=", "V", "->", "!"]
+
+introduce = {
+    "->": introduce_implication
+}
 
 
 class Ruler:
@@ -31,7 +36,9 @@ class Ruler:
         self.max = len(rules)
         self.operators = operators
 
-    def apply(self, rule: str) -> Callable[['Parser', 'TokenState', 'Token'], bool]:
+    # ======= ???:begin =======
+
+    def apply(self, rule: str) -> Callable[['Solver', 'TokenState', 'Token'], bool]:
         """Find a rule and return its handler"""
         if rule in self.rules:
             return self.rules[rule]
@@ -44,6 +51,22 @@ class Ruler:
             if test(premise):
                 return name
         return None
+
+    # ======= ???:end =======
+
+    def introduce(self, operator: str) -> Callable[['Solver', 'TokenState', 'Token'], bool]:
+        """Find a rule and return its handler"""
+        if operator in introduce:
+            return introduce[operator]
+        debug.log(f"Operator '{operator}' not found!", debug.ERROR)
+        raise Exception("Operator not found")
+
+    def eliminate(self, operator: str) -> Callable[['Solver', 'TokenState', 'Token'], bool]:
+        """Find a rule and return its handler"""
+        if operator in eliminate:
+            return eliminate[operator]
+        debug.log(f"Operator '{operator}' not found!", debug.ERROR)
+        raise Exception("Operator not found")
 
     # for ... in ... magic methods
     def __iter__(self):

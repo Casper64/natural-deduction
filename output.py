@@ -1,5 +1,8 @@
 import argparse
 import input
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from solve import Premise
 
 def display_start() -> None:
     p = argparse.ArgumentParser()
@@ -12,4 +15,17 @@ def display_start() -> None:
         input.read_from_file(args.file)
     else:
         input.read_from_input()
+
+class Step:
+    def __init__(self, premise: 'Premise', type: str):
+        self.premise = premise
+        self.type = type
+
+
+class NaturalDeductionTree:
+    def __init__(self):
+        self.steps: list[Step] = []
+
+    def add(self, step: Step):
+        self.steps.append(step)
     

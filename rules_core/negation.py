@@ -31,5 +31,10 @@ def negate(premise: any):
             return premise.replace("!", "")
     else:
         # premise must be of type 'Premise'
-        raw = negate(premise.raw)
-        return premise.recreate(raw)
+        string = premise.get()
+        if string[0] == "!":
+            string = string[1:]
+        else:
+            # ??? or string = "!("+string+")"
+            string = "!"+string
+        return premise.duplicate(string)

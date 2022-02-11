@@ -17,6 +17,9 @@ class Token:
         else:
             return 0
 
+    def raw(self):
+        return [self.lh, self.operator, self.rh]
+
     def __repr__(self, key="default"):
         # return f"[depth={self.depth[key]}] {self.lh} {self.operator} {self.rh}"
         return f"{self.lh} {self.operator} {self.rh}"

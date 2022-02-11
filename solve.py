@@ -1,15 +1,14 @@
+from tokens import Token
+from typing import Union
+from xml.dom.expatbuilder import Rejecter
 import debug
 from parse import Parser
 from ruler import Ruler
+import input
 import re
 import util
-import input
-from rules_core.negation import negate
-
-from typing import TYPE_CHECKING, Union
-if TYPE_CHECKING:
-    from tokens import Token, TokenState
-
+from  rules_core.negation import negate
+from output import NaturalDeductionTree, StepW
 
 CONCLUDE = ":-"
 
@@ -17,75 +16,74 @@ def init():
     for statement in input.statements:
         debug.log(f"Current statement: '{statement}'")
         solver = Solver(statement)
-        result = solver.start()
-        if result:
-            debug.log(f"Found solution! ({result})\n", debug.SUCCESS)
+        solver.start()
+        if solver.solved:
+            debug.log(f"Found solution!\n", debug.SUCCESS)
         else:
-            debug.log(f"Solution not found! ({result})\n", debug.ERROR)
-
-class Layer:
-    def __init__(self, rest: list['Premise'], target: 'Premise', assumption: 'Premise' = None):
-        self.assumption = assumption
-        self.assumptions = rest
-        if assumption:
-            self.assumptions.append(assumption)
-        self.target = target
-
-    def __repr__(self):
-        return f"Assumptions = {self.assumptions}, target = {self.target}"
+            debug.log(f"Solution not found!\n", debug.ERROR)
 
 class Premise:
-    def __init__(self, premise, raw=None):
+    def __init__(self, premise: str, raw=None):
         self._premise = util.cleanup(premise)
+        self._parse()
+
+    def get(self):
+        return self._premise
+
+    def set(self, premise: str):
+        self._premise = premise
+        self._parse()
+
+    def duplicate(self, premise: str):
+        return Premise(premise)
+
+    def _parse(self, raw=None):
         parser = Parser(self._premise, raw)
         self.raw = parser.raw
         self.literals = parser.literals
         self.tokens = parser.tokens
 
-    def get(self):
-        return self._premise
-
-    def negate(self):
-        self._premise = f"!({self._premise})"
-
     def from_raw(raw: list):
         """Returns premise created from raw state"""
         string = str(raw).replace("[", "(").replace("]", ")").replace("'", "").replace(",", "")
-        return Premise(string)
-
-    def recreate(self, raw=None):
-        premise = str(raw).replace("[", "(").replace("]", ")").replace("'", "").replace(",", "")
-        self = Premise(premise, raw)
-        return self
-
-    def __repr__(self):
-        return f"{self._premise}"
+        return Premise(string, raw)
 
     def __eq__(self, other: any):
         if isinstance(other, str):
-            debug.log("Comparing Premise with string!", debug.WARNING)
             return self._premise == other
+        elif isinstance(other, list):
+            return str(self.raw) == str(other)
         elif isinstance(other, Premise):
             return str(self.raw) == str(other.raw)
 
     def __ne__(self, other: any):
         if isinstance(other, str):
             return self._premise != other
+        elif isinstance(other, list):
+            return str(self.raw) != str(other)
         elif isinstance(other, Premise):
             return self._premise != other._premise
-        # if isinstance(other, str):
-        #     # Count the number of ! and if they aren't equal self and other aren't equal
-        #     c1 = re.findall("!", self._premise)
-        #     c2 = re.findall("!", other)
-        #     return c1 != c2
-        # elif isinstance(other, Premise):
-        #     # Count the number of ! and if they aren't equal self and other aren't equal
-        #     c1 = re.findall("!", self._premise)
-        #     c2 = re.findall("!", other._premise)
-        #     return c1 != c2
+
+    def __repr__(self):
+        return f"{self._premise}"
+
+class Layer:
+    def __init__(self, proved: list[Premise], assumption: Premise):
+        self.assumption = assumption
+        # In the layer itself the assumption is considered proved, but we know that might not be the case
+        # So we have to keep track of it
+        self.proved = proved
+        if assumption:
+            self.proved.append(assumption)
+
+    def __repr__(self):
+        return f"Assumption = {self.assumption}"
+
 
 class Solver:
     def __init__(self, statement: str):
+        self.solved = False
+
         self.statement = statement
         a = statement.split(CONCLUDE)
         if len(a) < 2:
@@ -110,133 +108,109 @@ class Solver:
 
         self.stack: list[Layer] = []
         self.level = 0
-        self.stack.append(Layer(self.premises, self.conclusion))
+        self.stack.append(Layer(self.premises, []))
 
     def start(self):
         debug.log("Starting solver")
         return self.prove(self.conclusion)
-        
-    def assume(self, at: 'Token', tt: 'Token'):
-        premise = Premise.from_raw(at)
-        target = Premise.from_raw(tt)
 
-        # Check if assumption is already assumed / proved
-        all_assumptions = self._get_stack_assumptions()
-        for assumption in all_assumptions:
-            if premise == assumption:
-                debug.log(f"{premise} is already assumed while trying to prove {target}")
-                return True
-
-        debug.log(f"Assuming {premise}, trying to prove {target}")
-
-
-        
-        self.stack.append(Layer(all_assumptions, target, assumption=premise))
-        self.level += 1
-
-        debug.log(f"New layer created at level {self.level}: {self.stack[self.level]}")
-        return self.prove(target)
-
-    def add_assumption(self, assumption: Premise):
-        self.stack[self.level].assumptions.append(assumption)
-
-        # Check if the assumption is the layer target
-        if self.stack[self.level].target == assumption:
-            debug.log(f"Target '{assumption}' found!", debug.SUCCESS)
-            return self.resolve()
-        
-        return False
-
-    def remove_assumption(self, assumption: Premise):
-        self.stack[self.level].assumptions = list(
-            filter(
-                lambda x: x != assumption,
-                self.stack[self.level].assumptions
-            )
-        )
-        # Check if the assumption is the layer target
-        if self.stack[self.level].target == negate(assumption):
-            debug.log(f"Target contradicts with '{assumption}'")
-            return self.reject(assumption)
-        
-        return False
-        
     def prove(self, target: Premise):
-        token = target.tokens.get_main_operator()
         debug.log(f"Trying to prove {target}")
+        token = target.tokens.get_main_operator()
+
+        # If the target to prove has an operator in it we need to somehow prove that the
+        # introduction rule of that operator is applicable in the current state.
+        # If not then the target is a contradiction
         if token:
-            return self.ruler.apply(token.operator)(self, target.tokens, token)
+            result = self.ruler.introduce(token.operator)(self, target.tokens, token)
+            print(result)
         else:
-            debug.log(f"No main operator found so target must be a literal")
-            # Finding premises with the literal included from the current assumptions (top from stack)
+            debug.log(f"No operator found so target must be a literal")
+            
+            # Checking if the target is already proved or the target is a contradiction
+            neg = negate(target)
+            for premise in self.stack[self.level].proved:
+                if premise == target:
+                    debug.log(f"{target} is already proved!")
+                    self.resolve(target)
+                    return True
+                if premise == neg:
+                    debug.log(f"Can't prove {target} because it contradicts with {premise}")
+                    self.reject(target)
+                    return False
+
+            # Get all the premises where the literal is used
             valids: list[Premise] = []
-            for premise in self.stack[-1].assumptions:
+            for premise in self.stack[-1].proved:
                 t = target.get().replace("!","")
                 for literal in premise.literals:
                     if re.match(r"!?"+t, literal):
                         valids.append(premise)
                         break
-            
-            i = 0
-            while i < len(valids):
-                if len(valids[i].literals) != 1:
-                    i += 1
-                    continue
-                # The literal is either p or !p (taking p as en example literal)
-                literal = valids[i].literals[0]
-                if target == premise:
-                    debug.log(f"{target} is valid", debug.SUCCESS)
-                    return True
-                else:
-                    # Make choice point:
-                    # Reject immediately and continue
-                    # Or declare this layer invalid and everything proved next is false
-                    debug.log(f"{target} is invalid")
-                    # Hack
-                    literal = Premise(literal, raw=[literal])
-                    # Reject immediately
-                    return self.remove_assumption(literal)
 
             debug.log(f"Valid premises containing literal {target} = {valids}")
-            
-            # Make choice point
             for premise in valids:
-                # Hack
-                found = self.prove(premise)
+                found = self.extract(premise, target)
                 if found:
+                    self.resolve(target)
                     return True
 
             return False
 
-    def resolve(self):
-        self.stack.pop()
+    def extract(self, premise: Premise, target: Premise):
+        debug.log(f"Trying to extract {target} from {premise}")
+        token = premise.tokens.get_main_operator()
+
+        # If there is no operator in the premise the premise is a literal
+        if not token:
+            debug.log(f"No operator found so premise must be a literal. You should not use 'Solver.extract' for comparing a literal with a literal", debug.WARNING)
+            return premise == target
+
+        return self.ruler.eliminate(token.operator)(self, premise.tokens, token)
+        
+
+    def resolve(self, premise: Premise):
+        debug.log(f"{premise} is true!")
         if self.level == 0:
+            self.solved = True
             return True
 
-        # Cut of choice point tree, since it was invalid
-        self.level -= 1
-        debug.log(f"Layer popped. New layer at level {self.level}: {self.stack[self.level]}")
-        # ????
-        # return False
+        # Make all the assumptions made at the previous layer true or somethign idk
+        # Maybe only for all introduction rules 
 
-    def reject(self, rejected: any):
         previous = self.stack.pop()
+        self.level -= 1
+        debug.log(f"Layer popped. New layer at level {self.level}: {self.stack[self.level]}")
+        return True
+
+    def reject(self, premise: Premise):
+        debug.log(f"{premise} is false!")
         if self.level == 0:
+            self.solved = True
             return True
 
-        # Cut of choice point tree, since it was invalid
+        previous = self.stack.pop()
         self.level -= 1
-
-        self.stack[self.level].assumptions.append(negate(previous.assumption))
         debug.log(f"Layer popped. New layer at level {self.level}: {self.stack[self.level]}")
+        return True
 
+    def assume(self, token: Token):
+        premise = Premise.from_raw(token)
+        self.stack.append(Layer(self.stack[self.level].proved, premise))
+        self.level += 1
 
-        # ????
-        return self.prove(self.stack[self.level].target)
+        debug.log(f"New layer created at level {self.level}: {self.stack[self.level]}")
+        return premise
 
-    def _get_stack_assumptions(self):
-        all_assumptions: list[Premise] = []
-        for layer in self.stack:
-            for assumption in layer.assumptions:
-                all_assumptions.append(assumption)
-        return all_assumptions
+    def add_prove(self, premise):
+        if isinstance(premise, Premise):
+            self.stack[self.level].proved.append(premise)
+        elif isinstance(premise, list):
+            p = Premise.from_raw(premise)
+            self.stack[self.level].proved.append(p)
+        elif isinstance(premise, str):
+            p = Premise(premise)
+            self.stack[self.level].proved.append(p)
+        elif isinstance(premise, Token):
+            p = Premise.from_raw(premise.raw())
+            self.stack[self.level].proved.append(p)
