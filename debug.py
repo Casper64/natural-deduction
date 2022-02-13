@@ -1,7 +1,7 @@
 from sre_constants import SUCCESS
 from time import localtime, strftime
 
-DEBUG=True
+DEBUG=False
 
 class bcolors:
     HEADER = '\033[95m'

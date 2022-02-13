@@ -8,7 +8,7 @@ import input
 import re
 import util
 from  rules_core.negation import negate
-from output import NaturalDeductionTree, StepW
+from output import NaturalDeductionTree, Step, StepType
 
 CONCLUDE = ":-"
 
@@ -21,6 +21,7 @@ def init():
             debug.log(f"Found solution!\n", debug.SUCCESS)
         else:
             debug.log(f"Solution not found!\n", debug.ERROR)
+        solver.nd.close()
 
 class Premise:
     def __init__(self, premise: str, raw=None):
@@ -55,6 +56,8 @@ class Premise:
             return str(self.raw) == str(other)
         elif isinstance(other, Premise):
             return str(self.raw) == str(other.raw)
+        elif isinstance(other, Token):
+            return str(self) == str(other)
 
     def __ne__(self, other: any):
         if isinstance(other, str):
@@ -68,21 +71,24 @@ class Premise:
         return f"{self._premise}"
 
 class Layer:
-    def __init__(self, proved: list[Premise], assumption: Premise):
+    def __init__(self, proved: list[Premise], assumption: Premise, target: Premise):
         self.assumption = assumption
+        self.target = target
         # In the layer itself the assumption is considered proved, but we know that might not be the case
         # So we have to keep track of it
         self.proved = proved
         if assumption:
             self.proved.append(assumption)
+            
 
     def __repr__(self):
-        return f"Assumption = {self.assumption}"
+        return f"Assumption = {self.assumption}, proved = {self.proved}"
 
 
 class Solver:
     def __init__(self, statement: str):
         self.solved = False
+        self.nd = NaturalDeductionTree(statement)
 
         self.statement = statement
         a = statement.split(CONCLUDE)
@@ -95,6 +101,10 @@ class Solver:
 
         self.premises = [Premise(x) for x in a[0].split(",")]
         self.conclusion = Premise(a[1])
+        
+        for premise in self.premises:
+            self.nd.add(Step(premise, StepType.P))
+
         debug.log(f"Raw representation of conclusion {self.conclusion.raw}")
         debug.log(f"With tokens = {self.conclusion.tokens}")
 
@@ -108,13 +118,21 @@ class Solver:
 
         self.stack: list[Layer] = []
         self.level = 0
-        self.stack.append(Layer(self.premises, []))
+        self.stack.append(Layer(self.premises, [], self.conclusion))
 
     def start(self):
         debug.log("Starting solver")
-        return self.prove(self.conclusion)
+        result = self.prove(self.conclusion)
+        if not result:
+            self.nd.add(Step("", StepType.CT))
+            return False
+        self.solved = result
+        return result
 
-    def prove(self, target: Premise):
+    def prove(self, target: Premise, caller: StepType = None):
+        if not isinstance(target, Premise):
+            target = Premise.from_raw(target)
+
         debug.log(f"Trying to prove {target}")
         token = target.tokens.get_main_operator()
 
@@ -123,7 +141,10 @@ class Solver:
         # If not then the target is a contradiction
         if token:
             result = self.ruler.introduce(token.operator)(self, target.tokens, token)
-            print(result)
+            if result:
+                return self.resolve(self.conclusion)
+
+            return self.reject(self.conclusion)
         else:
             debug.log(f"No operator found so target must be a literal")
             
@@ -135,27 +156,45 @@ class Solver:
                     self.resolve(target)
                     return True
                 if premise == neg:
+                    # Prove target with rule of called?
+                    if not caller:
+                        self.add_prove(target)
                     debug.log(f"Can't prove {target} because it contradicts with {premise}")
-                    self.reject(target)
+                    
                     return False
 
             # Get all the premises where the literal is used
             valids: list[Premise] = []
+
+
             for premise in self.stack[-1].proved:
                 t = target.get().replace("!","")
                 for literal in premise.literals:
                     if re.match(r"!?"+t, literal):
-                        valids.append(premise)
+                        l = Premise(literal)
+                        valids.append((l, premise))
                         break
 
-            debug.log(f"Valid premises containing literal {target} = {valids}")
-            for premise in valids:
-                found = self.extract(premise, target)
-                if found:
-                    self.resolve(target)
-                    return True
+            # If there are no valids the premise can't be proved
+            if len(valids) == 0:
+                debug.log(f"No valid premises were found trying to prove {target}")
+                return False
 
-            return False
+            debug.log(f"Valid premises containing literal {target} = {valids}")
+            for t, premise in valids:
+                found = self.extract(premise, t)
+                if found:
+                    # Check if the extraction succeeded, but not yet found the right target
+                    if target in self.stack[self.level].proved:
+                        self.resolve(target)
+                        continue
+                    # Else remove the prove because the target was not found and we need to continue
+                    # Maybe this crashes at some point because a next prove on the same level needs the premise
+                    else:
+                        debug.log(f"(see below) because {target} was not found, but something else did. semi fix? (from 'solve.py:192')", debug.WARNING)
+                self.remove_prove(premise)
+
+            return self.prove(self.stack[self.level].target)
 
     def extract(self, premise: Premise, target: Premise):
         debug.log(f"Trying to extract {target} from {premise}")
@@ -166,11 +205,19 @@ class Solver:
             debug.log(f"No operator found so premise must be a literal. You should not use 'Solver.extract' for comparing a literal with a literal", debug.WARNING)
             return premise == target
 
-        return self.ruler.eliminate(token.operator)(self, premise.tokens, token)
+        hand = token.includes(target)
+
+        if hand == 1:
+            return self.ruler.eliminate(token.operator)(self, premise.tokens, token)
+        elif hand == -1:
+            return self.ruler.introduce(token.operator)(self, premise.tokens, token)
         
+        debug.log("Hand is equal!!", debug.WARNING)
+        return False
 
     def resolve(self, premise: Premise):
         debug.log(f"{premise} is true!")
+        self.nd.add(Step("", StepType.CA))
         if self.level == 0:
             self.solved = True
             return True
@@ -184,25 +231,45 @@ class Solver:
         return True
 
     def reject(self, premise: Premise):
-        debug.log(f"{premise} is false!")
+        self.nd.add(Step("", StepType.CT))
+        self.nd.add(Step("", StepType.CA))
+
         if self.level == 0:
-            self.solved = True
-            return True
+            self.solved = False
+            return False
 
         previous = self.stack.pop()
+        debug.log(f"{previous.assumption} is false!")
         self.level -= 1
-        debug.log(f"Layer popped. New layer at level {self.level}: {self.stack[self.level]}")
-        return True
+        self.stack[self.level].proved.remove(previous.assumption)
 
-    def assume(self, token: Token):
+
+        neg = negate(previous.assumption)
+        self.add_prove(neg, False)
+        if premise in self.stack[self.level].proved:
+            self.stack[self.level].proved.remove(premise)
+        self.nd.add(Step(neg, StepType.EN))
+
+
+        debug.log(f"Layer popped. New layer at level {self.level}: {self.stack[self.level]}")
+
+        return False
+
+    def assume(self, token: Token, target: Token):
         premise = Premise.from_raw(token)
-        self.stack.append(Layer(self.stack[self.level].proved, premise))
+        pt = Premise.from_raw(target)
+        self.nd.add(Step("", StepType.OA))
+        self.nd.add(Step(premise, StepType.A))
+        self.stack.append(Layer(self.stack[self.level].proved, premise, pt))
         self.level += 1
 
         debug.log(f"New layer created at level {self.level}: {self.stack[self.level]}")
         return premise
 
-    def add_prove(self, premise):
+    def add_prove(self, premise, add_as_assumption=True):
+        if add_as_assumption:
+            self.nd.add(Step(premise, StepType.A))
+
         if isinstance(premise, Premise):
             self.stack[self.level].proved.append(premise)
         elif isinstance(premise, list):
@@ -214,3 +281,11 @@ class Solver:
         elif isinstance(premise, Token):
             p = Premise.from_raw(premise.raw())
             self.stack[self.level].proved.append(p)
+
+    def remove_prove(self, premise):
+        if isinstance(premise, Token):
+            premise = Premise.from_raw(premise)
+        
+        if premise in self.stack[self.level].proved:
+            debug.log(f"Removing {premise} from the current layer")
+            self.stack[self.level].proved.remove(premise)

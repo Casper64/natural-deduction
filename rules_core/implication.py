@@ -1,6 +1,9 @@
 import re
+
 import debug
 from typing import TYPE_CHECKING
+from output import Step, StepType
+from rules_core.negation import negate
 if TYPE_CHECKING:
     from solve import Solver
     from tokens import TokenState, Token
@@ -10,33 +13,54 @@ def test_implication(string: str):
     return match
 
 # Implication elimination rule
-def implication(solver: 'Solver', state: 'TokenState', token: 'Token'):    
+def implication(solver: 'Solver', state: 'TokenState', token: 'Token'):  
     debug.log(f"Trying implication elimitation rule on {token}")
 
-    # Check if token.lh is valid, then token.rh must be valid to
+    # Check if token.lh is already proved, then token.rh must be valid to
     valid = False
     proved_list = solver.stack[solver.level].proved
+    neg = negate(token.lh)
     for proved in proved_list:
         if proved == token.lh:
             valid = True
             break
+        # Breakout!!
+        if proved == neg:
+            debug.log(f"Elimination rule of implication on {token} not valid, contradicts with {proved}")
+            solver.assume(token.lh, token.rh)
+            solver.reject(neg)
+            solver.remove_prove(token)
+            return False
+
+    # Try to prove token.lh if not already proved
+    if not valid:
+        debug.log("Lefthand of implication wasn't already proved so trying now")
+        valid = solver.prove(token.lh)
+    
     if valid:
+        print(token.rh)
         debug.log(f"{token.lh} is true so {token.rh} is also true following {token}", debug.SUCCESS)
-        solver.add_prove(token.rh)
+        solver.nd.add(Step(token.rh, StepType.EI))
+        solver.add_prove(token.rh, False)
         return True
     debug.log(f"Elimination rule of implication on {token} not valid")
-    return False
+    return introduce_implication(solver, state, token)
 
 
 # Implication introduction rule
 def introduce_implication(solver: 'Solver', state: 'TokenState', token: 'Token'):
     debug.log(f"Trying implication introduction rule on {token}")
     # Assume lefthand side and if righthand side follows the 
-    premise = solver.assume(token.lh)
-    valid = solver.prove(premise)
+    premise = solver.assume(token.lh, token.rh)
+    valid = solver.prove(token.rh, StepType.II)
     if valid:
         debug.log(f"Introducing {token}")
-        solver.add_prove(token)
+        solver.nd.add(Step(token, StepType.II))
+        solver.add_prove(token, False)
         return True
+
     debug.log(f"Introduction of {token} not valid")
+    # From now on everything that is proved is false, because the assumption will end in a cotnradiction
+    solver.nd.add(Step(token.rh, StepType.EI))
+    solver.reject(premise)
     return False

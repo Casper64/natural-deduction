@@ -68,6 +68,7 @@ class Parser:
         if stack:
             debug.log(f"Missing ')' in '{string}'", debug.WARNING)
 
+
         # In case that the premise doesn't end with an ')', but does contain parentheses
         if result and string[start + 1:]:
             result.append(string[start + 1:])
@@ -78,15 +79,17 @@ class Parser:
         # But should be ['p ^ q']
         # Choose tho do it here instead of on the string,
         # because it's easier to implement when the structure is already clear
-        def check(a):
+        def check(a, level=0):
             if isinstance(a, list) and len(a) == 1:
                 a = a[0]
-                a = check(a)
+                a = check(a, 0)
             elif isinstance(a, list):
                 for i in range(len(a)):
-                    a[i] = check(a[i])
+                    a[i] = check(a[i], level+1)
+            # elif level == 0:
+            #     return a
             # Only case where a is a string and should not be wrapped in a list
-            elif not isinstance(a, list) and a != '!':
+            elif not isinstance(a, list) and a != '!' and level == 0:
                 return [a]
             return a
 
