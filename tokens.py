@@ -51,8 +51,8 @@ class Token:
     def __repr__(self, key="default"):
         # return f"[depth={self.depth[key]}] {self.lh} {self.operator} {self.rh}"
         s = f"{self.lh} {self.operator} {self.rh}"
-        if self.depth["default"] != 0:
-            s = f"({s})"
+        # if self.depth["local"] != 0:
+        #     s = f"({s})"
         return s
         
 
@@ -69,7 +69,7 @@ class TokenState:
 
     def append(self, token: Token):
         """Insert a token to the state"""
-        # FIX for a ^ b ^c:
+        # FIX for a ^ b ^ c:
         # Raw will be ['a','^','b','^','c']
         # Check if lefthand is already included on the previous righthand
         # If so set lefthand to one level up with raw token = ['b','^','c']
@@ -108,20 +108,23 @@ class TokenState:
         main = zeros[0]
         return self.find_with_state(main)
 
-    def find_with_state(self, token: Token):
+    def find_with_state(self, token: Token) -> Token:
 
         # Simple case when a side is just one integer
         if isinstance(token.rh, int):
-            return self.find_with_state(Token(token.lh, token.operator, self.state[token.rh]))
+            t = self.find_with_state(Token(token.lh, token.operator, self.state[token.rh], 0))
+            t.rh = [t.rh]
+            return t
         elif isinstance(token.lh, int):
-            return self.find_with_state(Token(self.state[token.lh], token.operator, token.rh))
+            t = self.find_with_state(Token(self.state[token.lh], token.operator, token.rh, 0))
+            t.lh = [t.lh]
+            return t
 
         # Case where there are multiple replacebles in one hand
         if isinstance(token.rh, Token):
             token.rh = self.find_with_state(token.rh)
         if isinstance(token.lh, Token):
             token.lh = self.find_with_state(token.lh)
-
         return token
 
     def __repr__(self):

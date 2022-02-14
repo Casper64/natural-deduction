@@ -229,6 +229,9 @@ class Solver:
         return True
 
     def reject(self, premise: Premise):
+        if not isinstance(premise, Premise):
+            premise = Premise.from_raw(premise)
+
         self.nd.add(Step("", StepType.CT))
         self.nd.add(Step("", StepType.CA))
 

@@ -3,6 +3,7 @@ from enum import Enum
 from random import random
 import input
 import debug
+import math
 import util
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -41,6 +42,7 @@ class StepType(Enum):
 class Step:
     # TODO: implement rule numbers for the steps, hashmap maybe??
     def __init__(self, premise: 'Premise', type: StepType):
+        premise = str(premise).replace("[", "(").replace("]", ")").replace("'", "")
         self.premise = premise
         self._type = type
 
@@ -82,6 +84,8 @@ class NaturalDeductionTree:
         r = str(random())
         level = 1
         line = 1
+        max_lines = len(str(len(self.steps)))
+        max_prepend = ' ' * max_lines
 
         for i, step in enumerate(self.steps):
             # Change current level if open assumption or close assumption
@@ -91,6 +95,8 @@ class NaturalDeductionTree:
             elif step._type == StepType.CA:
                 level -= 1
                 continue
+            
+            lines = f"{line}{' ' * (max_lines - len(str(line)))}"
 
             if isinstance(step.premise, str):
                 premise = step.premise
@@ -101,17 +107,17 @@ class NaturalDeductionTree:
 
             if step._type == StepType.CT:
                 premise = "⊥"
-            string = f"{line}{' │ ' * level}{premise}{r}_{step.type()}\n"
+            string = f"{lines}{' │ ' * level}{premise}{r}_{step.type()}\n"
 
             # Open assumption so draw a line
             if step._type == StepType.A and i-1 >= 0 and self.steps[i-1]._type == StepType.OA:
-                string += f" {' │ ' * (level-1)} ├{'─'*len(premise)}\n"
+                string += f"{max_prepend}{' │ ' * (level-1)} ├{'─'*len(premise)}\n"
             # If its the last premise draw a line
             elif step._type == StepType.P and i+1 != len(self.steps) and self.steps[i+1]._type != StepType.P:
-                string += f" {' │ ' * (level-1)} ├{'─'*(len(premise)+1)}\n"
+                string += f"{max_prepend}{' │ ' * (level-1)} ├{'─'*(len(premise)+1)}\n"
             # If its the last premise draw a line, but added the case where the premise is the last premise
             elif step._type == StepType.P and i+1 == len(self.steps):
-                string += f" {' │ ' * (level-1)} ├{'─'*(len(premise)+1)}\n"
+                string += f"{max_prepend}{' │ ' * (level-1)} ├{'─'*(len(premise)+1)}\n"
 
 
             result.append(string)

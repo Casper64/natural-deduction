@@ -55,7 +55,14 @@ def eliminate_implication(solver: 'Solver', state: 'TokenState', token: 'Token')
 def introduce_implication(solver: 'Solver', state: 'TokenState', token: 'Token'):
     debug.log(f"Trying implication introduction rule on {token}")
     # Assume lefthand side and if righthand side follows the implication is valid
-    premise = solver.assume(token.lh, token.rh)
+    if not isinstance(token.lh, str):
+        premise = token.lh
+        if not solver.prove(token.lh):
+            debug.log(f"Can't prove {token.lh}, so introduction of {token} is not valid")
+            return False
+        debug.log(f"Continuing Trying implication introduction rule on {token}")
+    else:
+        premise = solver.assume(token.lh, token.rh)
     valid = solver.prove(token.rh, StepType.II)
     if valid:
         debug.log(f"Introducing {token}")

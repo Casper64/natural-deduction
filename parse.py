@@ -1,3 +1,4 @@
+from tkinter import N
 import debug
 import util
 import re
@@ -111,12 +112,25 @@ class Parser:
         else:
             # variable to keep track how many replaces are done
             l =  0
+            # all_strings = 
+            split = False
             while match := re.search(operator_regex, result, re.MULTILINE):
                 # Replacing magic
-                original[index:index] = [result[:match.start()], result[match.start():match.end()]]
-                l += 2
-                index += 2
-                result = result[match.end():]
+                if split:
+                    new_list = [result[:match.start()], result[match.start():match.end()], [result[match.end():]]]
+                    original[index] = new_list
+                    n = self._parse_operators(new_list, original, 2)
+                    index += 1
+                    l += 1
+                    
+                    result = ""
+                else:
+                    original[index:index] = [result[:match.start()], result[match.start():match.end()]]
+                    l += 2
+                    index += 2
+
+                    split = True
+                    result = result[match.end():]
             original[index:index+1] = [result]
             return l
 
