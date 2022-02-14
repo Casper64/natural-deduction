@@ -1,19 +1,24 @@
-import re
-
 import debug
 from typing import TYPE_CHECKING
 from output import Step, StepType
 from rules_core.negation import negate
 if TYPE_CHECKING:
-    from solve import Solver
+    from solve import Solver, Premise
     from tokens import TokenState, Token
 
-def test_implication(string: str):
-    match = bool(re.search("->", string))
-    return match
+def implication(solver: 'Solver', target: 'Premise', state: 'TokenState', token: 'Token'):
+    hand = token.includes(target)
+
+    if hand == 1:
+        return eliminate_implication(solver, state, token)
+    elif hand == -1:
+        return introduce_implication(solver, state, token)
+
+    debug.log("Hand is equal!!", debug.WARNING)
+    return False
 
 # Implication elimination rule
-def implication(solver: 'Solver', state: 'TokenState', token: 'Token'):  
+def eliminate_implication(solver: 'Solver', state: 'TokenState', token: 'Token'):  
     debug.log(f"Trying implication elimitation rule on {token}")
 
     # Check if token.lh is already proved, then token.rh must be valid to
@@ -38,7 +43,6 @@ def implication(solver: 'Solver', state: 'TokenState', token: 'Token'):
         valid = solver.prove(token.lh)
     
     if valid:
-        print(token.rh)
         debug.log(f"{token.lh} is true so {token.rh} is also true following {token}", debug.SUCCESS)
         solver.nd.add(Step(token.rh, StepType.EI))
         solver.add_prove(token.rh, False)
@@ -50,7 +54,7 @@ def implication(solver: 'Solver', state: 'TokenState', token: 'Token'):
 # Implication introduction rule
 def introduce_implication(solver: 'Solver', state: 'TokenState', token: 'Token'):
     debug.log(f"Trying implication introduction rule on {token}")
-    # Assume lefthand side and if righthand side follows the 
+    # Assume lefthand side and if righthand side follows the implication is valid
     premise = solver.assume(token.lh, token.rh)
     valid = solver.prove(token.rh, StepType.II)
     if valid:

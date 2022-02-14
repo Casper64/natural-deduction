@@ -10,6 +10,8 @@ import util
 from  rules_core.negation import negate
 from output import NaturalDeductionTree, Step, StepType
 
+# TODO: Add docstrings to all methods!!
+
 CONCLUDE = ":-"
 
 def init():
@@ -142,9 +144,12 @@ class Solver:
         if token:
             result = self.ruler.introduce(token.operator)(self, target.tokens, token)
             if result:
-                return self.resolve(self.conclusion)
-
-            return self.reject(self.conclusion)
+                # return self.resolve(target)
+                if target == self.stack[self.level].target:
+                        return self.resolve(target)
+                else:
+                    return True
+            return self.reject(target)
         else:
             debug.log(f"No operator found so target must be a literal")
             
@@ -153,7 +158,8 @@ class Solver:
             for premise in self.stack[self.level].proved:
                 if premise == target:
                     debug.log(f"{target} is already proved!")
-                    self.resolve(target)
+                    if target == self.stack[self.level].target:
+                            self.resolve(target)
                     return True
                 if premise == neg:
                     # Prove target with rule of called?
@@ -204,16 +210,8 @@ class Solver:
         if not token:
             debug.log(f"No operator found so premise must be a literal. You should not use 'Solver.extract' for comparing a literal with a literal", debug.WARNING)
             return premise == target
-
-        hand = token.includes(target)
-
-        if hand == 1:
-            return self.ruler.eliminate(token.operator)(self, premise.tokens, token)
-        elif hand == -1:
-            return self.ruler.introduce(token.operator)(self, premise.tokens, token)
         
-        debug.log("Hand is equal!!", debug.WARNING)
-        return False
+        return self.ruler.apply(token.operator)(self, target, premise.tokens, token)
 
     def resolve(self, premise: Premise):
         debug.log(f"{premise} is true!")

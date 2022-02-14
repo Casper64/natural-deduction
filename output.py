@@ -1,9 +1,9 @@
 import argparse
-from encodings import utf_8
 from enum import Enum
 from random import random
 import input
 import debug
+import util
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from solve import Premise
@@ -34,9 +34,12 @@ class StepType(Enum):
     CT=6 # Contradiction aka Introduction negation
     IN=7 # Introduction negation
     EN=8 # Elimination negation
+    IA=9 # Introduction and
+    EA=10 # Elimination and
     
 
 class Step:
+    # TODO: implement rule numbers for the steps, hashmap maybe??
     def __init__(self, premise: 'Premise', type: StepType):
         self.premise = premise
         self._type = type
@@ -56,6 +59,10 @@ class Step:
             return "I¬. "
         elif self._type == StepType.EN:
             return "E¬. " 
+        elif self._type == StepType.IA:
+            return "I^. "
+        elif self._type == StepType.EA:
+            return "E^. "
 
         return self._type
     def __repr__(self):
@@ -77,6 +84,7 @@ class NaturalDeductionTree:
         line = 1
 
         for i, step in enumerate(self.steps):
+            # Change current level if open assumption or close assumption
             if step._type == StepType.OA:
                 level += 1
                 continue
@@ -87,7 +95,7 @@ class NaturalDeductionTree:
             if isinstance(step.premise, str):
                 premise = step.premise
             else:
-                premise = str(step.premise)
+                premise = util.cleanup(str(step.premise))
 
             premise = premise.replace("!", "¬")
 
@@ -118,10 +126,10 @@ class NaturalDeductionTree:
             s = string.split("\n")[0]
             l = len(s)
             l2 = len(s.split("_")[1])
-            # print(l, max_len, string.split("\n")[0])
+            # Align all action type thingies to the right on the same place
             replaceable = " " * (4 + max_len - l + l2)
             string = string.replace(r+"_", replaceable)
             p += string
 
-
+        # TODO: better way of printing?
         print(p)

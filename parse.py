@@ -45,8 +45,11 @@ class Parser:
         start = 0
         
         # Extract all the parentheses into a multidimensional array
+        # Loop through all the characters and detect if there are parentheses
+        # If so add their contents on a stack, useful when dealing with nested parentheses
         for i, c in enumerate(string):
             if c == '(':
+                # TODO: maybe change this to 'if not stack and ...'
                 if len(stack) == 0 and (res := string[start:i]):
                         result.append(res)
                 elif res := string[start + 1:i]:
@@ -137,9 +140,10 @@ class Parser:
             return 0
 
     def _tokenize(self, raw: list, depth: int):
+        """Convert the raw state into tokens"""
         for index, partial in enumerate(raw):
             if isinstance(partial, str) and re.match(operator_regex, partial, re.MULTILINE):
-                # An operator has a righthand side and lefthand side, IF the operator is not '!'
+                # An operator has a righthand side and lefthand side, IF the operator is not not ('!')
                 operator = partial
                 lh=""
                 if operator != '!':
@@ -153,4 +157,3 @@ class Parser:
         
                 
         
-        # helper(self.raw)

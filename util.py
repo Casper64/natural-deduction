@@ -6,10 +6,13 @@ def cleanup(string: str):
     string = string.strip()
     if not string:
         return ""
-    
-    if string[0] != "!" and string[-1] == ')' and len(re.findall('\)', string)) == 1:
-        string = string[:-1]
-    if string[0] == '(' and len(re.findall('\(', string)) == 1:
-        string = string[1:]
-    
-    return string
+
+    start = 0
+    end = len(string)
+
+    if string[0] == "(" and len(re.findall("\(", string)) != len(re.findall("\)", string)):
+        start += 1
+    if string[-1] == ")" and len(re.findall("\(", string)) != len(re.findall("\)", string)):
+        end -= 1
+
+    return string[start:end]

@@ -1,6 +1,10 @@
 import debug
-from rules_core.implication import implication, test_implication, introduce_implication
-from rules_core.negation import negation, test_negation
+
+from rules_core.implication import implication, eliminate_implication, introduce_implication
+from rules_core.and_rule import and_rule, eliminate_and, introduce_and
+from rules_core.negation import negation
+
+
 from typing import Callable, TYPE_CHECKING
 if TYPE_CHECKING:
     from tokens import Token, TokenState
@@ -13,60 +17,48 @@ if TYPE_CHECKING:
 """
 rules = {
     "->": implication,
+    "^": and_rule,
     "!": negation
 }
-eliminate = rules
 
-tests = {
-    "->": test_implication,
-    "!": test_negation
+introductions = {
+    "->": introduce_implication,
+    "^": introduce_and
+}
+
+eliminations = {
+    "->": eliminate_implication,
+    "^": eliminate_and
 }
 
 operators = ["\^", "=", "V", "->", "!"]
 
-introduce = {
-    "->": introduce_implication
-}
-
 
 class Ruler:
     def __init__(self):
-        self.rules = rules
-        self.tests = tests
         self.max = len(rules)
         self.operators = operators
 
-    # ======= ???:begin =======
-
-    def apply(self, rule: str) -> Callable[['Solver', 'TokenState', 'Token'], bool]:
+    def apply(self, rule: str) -> Callable[['Solver', 'Premise','TokenState', 'Token'], bool]:
         """Find a rule and return its handler"""
-        if rule in self.rules:
-            return self.rules[rule]
+        if rule in rules:
+            return rules[rule]
         debug.log(f"Rule '{rule}' not found!", debug.ERROR)
         raise Exception("Rule not found")
 
-    def test(self, premise: str):
-        """Returns which rule matches the premise"""
-        for name, test in tests.items():
-            if test(premise):
-                return name
-        return None
+    def introduce(self, rule: str) -> Callable[['Solver', 'Premise', 'TokenState'], bool]:
+        """Find an introduction rule"""
+        if rule in introductions:
+            return introductions[rule]
+        debug.log(f"Introduction rule '{rule}' not found!", debug.ERROR)
+        raise Exception("Rule not found")
 
-    # ======= ???:end =======
-
-    def introduce(self, operator: str) -> Callable[['Solver', 'TokenState', 'Token'], bool]:
-        """Find a rule and return its handler"""
-        if operator in introduce:
-            return introduce[operator]
-        debug.log(f"Operator '{operator}' not found!", debug.ERROR)
-        raise Exception("Operator not found")
-
-    def eliminate(self, operator: str) -> Callable[['Solver', 'TokenState', 'Token'], bool]:
-        """Find a rule and return its handler"""
-        if operator in eliminate:
-            return eliminate[operator]
-        debug.log(f"Operator '{operator}' not found!", debug.ERROR)
-        raise Exception("Operator not found")
+    def eliminate(self, rule: str) -> Callable[['Solver', 'Premise', 'TokenState'], bool]:
+        """Find an elimination rule"""
+        if rule in eliminations:
+            return eliminations[rule]
+        debug.log(f"Elimination rule '{rule}' not found!", debug.ERROR)
+        raise Exception("Rule not found")
 
     # for ... in ... magic methods
     def __iter__(self):

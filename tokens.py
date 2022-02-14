@@ -8,6 +8,15 @@ class Token:
         self.rh = rh
         self.depth = { "default": depth, "local": depth }
 
+    def hand(self, hand: int):
+        """Return the hand of the token according to a number where -1 is the left hand and 1 is the right hand and 0 is the whole token"""
+        if hand == 0:
+            return self
+        elif hand == 1:
+            return self.rh
+        elif hand == -1:
+            return self.lh
+
     def contains(self, other: 'Token'):
         """Check if a token is a righthand or lefthand value of the current token"""
         b = [other.lh, other.operator, other.rh]

@@ -26,6 +26,7 @@ def log(string: str, level=INFO, time=True):
         return
     t = ""
 
+    # Prepend time stamp to the string
     if time:
         t = strftime("%H:%M:%S", localtime()) + " "
     print(f"{t}{level}{string}{bcolors.ENDC}")
