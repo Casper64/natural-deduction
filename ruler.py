@@ -2,7 +2,7 @@ import debug
 
 from rules_core.implication import implication, eliminate_implication, introduce_implication
 from rules_core.and_rule import and_rule, eliminate_and, introduce_and
-from rules_core.negation import negation
+from rules_core.negation import negation, introduce_negation
 
 
 from typing import Callable, TYPE_CHECKING
@@ -23,7 +23,8 @@ rules = {
 
 introductions = {
     "->": introduce_implication,
-    "^": introduce_and
+    "^": introduce_and,
+    "!": introduce_negation
 }
 
 eliminations = {
@@ -31,13 +32,12 @@ eliminations = {
     "^": eliminate_and
 }
 
-operators = ["\^", "=", "V", "->", "!"]
+operator_regex = r"\^|v|->|=|^!$"
 
 
 class Ruler:
     def __init__(self):
         self.max = len(rules)
-        self.operators = operators
 
     def apply(self, rule: str) -> Callable[['Solver', 'Premise','TokenState', 'Token'], bool]:
         """Find a rule and return its handler"""

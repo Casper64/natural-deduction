@@ -16,3 +16,6 @@ def cleanup(string: str):
         end -= 1
 
     return string[start:end]
+
+def raw_to_str(raw: any):
+    return str(raw).replace("[", "(").replace("]", ")").replace("'", "").replace(",", "")

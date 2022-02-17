@@ -75,6 +75,7 @@ class NaturalDeductionTree:
     def __init__(self, statement: str):
         self.steps: list[Step] = []
         self.statement = statement.replace(":-", "⊢")
+        self.statement = statement.replace("!", "¬")
 
     def add(self, step: Step):
         self.steps.append(step)
@@ -99,7 +100,7 @@ class NaturalDeductionTree:
             lines = f"{line}{' ' * (max_lines - len(str(line)))}"
 
             if isinstance(step.premise, str):
-                premise = step.premise
+                premise = util.raw_to_str(step.premise)
             else:
                 premise = util.cleanup(str(step.premise))
 

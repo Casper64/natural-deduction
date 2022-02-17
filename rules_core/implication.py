@@ -15,7 +15,7 @@ def implication(solver: 'Solver', target: 'Premise', state: 'TokenState', token:
         return introduce_implication(solver, state, token)
 
     debug.log("Hand is equal!!", debug.WARNING)
-    return False
+    return introduce_implication(solver, state, token)
 
 # Implication elimination rule
 def eliminate_implication(solver: 'Solver', state: 'TokenState', token: 'Token'):  
@@ -53,8 +53,9 @@ def eliminate_implication(solver: 'Solver', state: 'TokenState', token: 'Token')
 
 # Implication introduction rule
 def introduce_implication(solver: 'Solver', state: 'TokenState', token: 'Token'):
-    debug.log(f"Trying implication introduction rule on {token}")
     # Assume lefthand side and if righthand side follows the implication is valid
+    debug.log(f"Trying implication introduction rule on {token}")
+    # Check if the lefthand side is a not literal
     if not isinstance(token.lh, str):
         premise = token.lh
         if not solver.prove(token.lh):

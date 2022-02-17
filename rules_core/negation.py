@@ -1,21 +1,28 @@
 import re
-from debug import log
+import debug
 from tokens import Token
+from output import Step, StepType
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from solve import Solver, Premise
     from tokens import TokenState, Token
 
-def test_negation(string: str):
-    match = bool(re.search("!", string))
-    return match
 
 def negation(solver: 'Solver', target: 'Premise', state: 'TokenState', token: 'Token'): 
     
-    log(f"Applying negation rule on {token}")
+    debug.log(f"Applying negation rule on {token}")
 
     return True
 
+def introduce_negation(solver: 'Solver', state: 'TokenState', token: 'Token'):
+    debug.log(f"Trying negation introduction rule on {token}")
+    valid = solver.prove(token.rh)
+    if valid:
+        debug.log(f"Introduction of {token} is not valid")
+        return False
+    debug.log(f"Introduction of {token} is valid")
+    solver.nd.add(Step(token, StepType.IN))
+    return True
 
     
 def negate(premise: any):

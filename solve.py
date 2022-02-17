@@ -26,9 +26,19 @@ def init():
         solver.nd.close()
 
 class Premise:
-    def __init__(self, premise: str, raw=None):
+    def __init__(self, premise: any, raw=None):
         self._premise = util.cleanup(premise)
-        self._parse()
+        self._parse(raw)
+
+    def create(premise: any):
+        if isinstance(premise, Premise):
+            return premise
+        elif isinstance(premise, list):
+            return Premise.from_raw(premise)
+        elif isinstance(premise, Token):
+            return Premise.from_raw(premise.get_raw())
+        else:
+            return Premise(premise)
 
     def get(self):
         return self._premise
@@ -48,7 +58,19 @@ class Premise:
 
     def from_raw(raw: list):
         """Returns premise created from raw state"""
-        string = str(raw).replace("[", "(").replace("]", ")").replace("'", "").replace(",", "")
+        def search(a):
+            if isinstance(a, list):
+                for i, b in enumerate(a):
+                    # Prevent weird slicing of string
+                    if not isinstance(b, str):
+                        a[i:i+1] = search(b)
+            elif isinstance(a, Token):
+                a = a.get_raw()
+            elif isinstance(a, Premise):
+                a = a.raw
+            return a
+        raw = search(raw)
+        string = util.raw_to_str(raw)
         return Premise(string, raw)
 
     def __eq__(self, other: any):
@@ -133,7 +155,7 @@ class Solver:
 
     def prove(self, target: Premise, caller: StepType = None):
         if not isinstance(target, Premise):
-            target = Premise.from_raw(target)
+            target = Premise.create(target)
 
         debug.log(f"Trying to prove {target}")
         token = target.tokens.get_main_operator()
@@ -164,7 +186,7 @@ class Solver:
                 if premise == neg:
                     # Prove target with rule of called?
                     if not caller:
-                        self.add_prove(target)
+                        self.add_prove(target, True)
                     debug.log(f"Can't prove {target} because it contradicts with {premise}")
                     
                     return False
@@ -177,7 +199,7 @@ class Solver:
                 t = target.get().replace("!","")
                 for literal in premise.literals:
                     if re.match(r"!?"+t, literal):
-                        l = Premise(literal)
+                        l = Premise.create(literal)
                         valids.append((l, premise))
                         break
 
@@ -215,11 +237,11 @@ class Solver:
 
     def resolve(self, premise: Premise):
         debug.log(f"{premise} is true!")
-        self.nd.add(Step("", StepType.CA))
         if self.level == 0:
             self.solved = True
             return True
 
+        self.nd.add(Step("", StepType.CA))
         # Make all the assumptions made at the previous layer true or somethign idk
         # Maybe only for all introduction rules 
 
@@ -233,7 +255,8 @@ class Solver:
             premise = Premise.from_raw(premise)
 
         self.nd.add(Step("", StepType.CT))
-        self.nd.add(Step("", StepType.CA))
+        if self.level != 0:
+            self.nd.add(Step("", StepType.CA))
 
         if self.level == 0:
             self.solved = False
@@ -257,8 +280,8 @@ class Solver:
         return False
 
     def assume(self, token: Token, target: Token):
-        premise = Premise.from_raw(token)
-        pt = Premise.from_raw(target)
+        premise = Premise.create(token)
+        pt = Premise.create(target)
         self.nd.add(Step("", StepType.OA))
         self.nd.add(Step(premise, StepType.A))
         self.stack.append(Layer(self.stack[self.level].proved, premise, pt))
@@ -267,21 +290,14 @@ class Solver:
         debug.log(f"New layer created at level {self.level}: {self.stack[self.level]}")
         return premise
 
-    def add_prove(self, premise, add_as_assumption=True):
+    def add_prove(self, p, add_as_assumption):
+        premise = Premise.create(p)
         if add_as_assumption:
             self.nd.add(Step(premise, StepType.A))
 
-        if isinstance(premise, Premise):
-            self.stack[self.level].proved.append(premise)
-        elif isinstance(premise, list):
-            p = Premise.from_raw(premise)
-            self.stack[self.level].proved.append(p)
-        elif isinstance(premise, str):
-            p = Premise(premise)
-            self.stack[self.level].proved.append(p)
-        elif isinstance(premise, Token):
-            p = Premise.from_raw(premise.raw())
-            self.stack[self.level].proved.append(p)
+
+        self.stack[self.level].proved.append(premise)
+           
 
     def remove_prove(self, premise):
         if isinstance(premise, Token):

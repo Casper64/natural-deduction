@@ -8,6 +8,21 @@ class Token:
         self.rh = rh
         self.depth = { "default": depth, "local": depth }
 
+    def get_raw(self):
+        lh = self._raw(self.lh)
+        rh = self._raw(self.rh)
+        return [lh, self.operator, rh]
+
+    def _raw(self, hand: any):
+        if isinstance(hand, Token):
+            return hand.get_raw()
+        elif isinstance(hand, list):
+            for index, item in enumerate(hand):
+                # Prevent weird slicing of string
+                if not isinstance(item, str):
+                    hand[index:index+1] = self._raw(item)
+        return hand
+
     def hand(self, hand: int):
         """Return the hand of the token according to a number where -1 is the left hand and 1 is the right hand and 0 is the whole token"""
         if hand == 0:
@@ -19,7 +34,12 @@ class Token:
 
     def contains(self, other: 'Token'):
         """Check if a token is a righthand or lefthand value of the current token"""
-        b = [other.lh, other.operator, other.rh]
+        if other.lh == "":
+            b = [other.operator, other.rh]
+        elif other.rh == "":
+            b = [other.lh, other.operator]
+        else:
+            b = [other.lh, other.operator, other.rh]
         v = 0
         if self.lh == b:
             v -= 1
@@ -45,14 +65,10 @@ class Token:
 
         return v
 
-    def raw(self):
-        return [self.lh, self.operator, self.rh]
-
     def __repr__(self, key="default"):
-        # return f"[depth={self.depth[key]}] {self.lh} {self.operator} {self.rh}"
         s = f"{self.lh} {self.operator} {self.rh}"
-        # if self.depth["local"] != 0:
-        #     s = f"({s})"
+        if self.operator == "!":
+            s = f"{self.operator}{self.rh}"
         return s
         
 
@@ -73,7 +89,6 @@ class TokenState:
         # Raw will be ['a','^','b','^','c']
         # Check if lefthand is already included on the previous righthand
         # If so set lefthand to one level up with raw token = ['b','^','c']
-
         self.n += 1
 
         for id, t in self.state.items():
@@ -100,12 +115,17 @@ class TokenState:
         if len(self.state.values()) == 0:
             return None
         # Find item where the local depth = 0, should be one item only!
-        zeros: list[Token] = list(filter(lambda x : x.depth["local"] == 0 ,list(self.state.values())))
+        zeros: list[Token] = list(filter(lambda x : x.depth["default"] == 0 ,list(self.state.values())))
         if len(zeros) > 1:
-            debug.log(f"Invalid number of main operators found in '{self._premise}", debug.WARNING)
+            debug.log(f"More than 1 main operator found in '{self._premise}, assuming most left operator as main operator", debug.WARNING)
         elif len(zeros) == 0:
             debug.log(f"No main operators found in '{self._premise}", debug.ERROR)
+        
         main = zeros[0]
+        # i = 0
+        # while i < len(zeros) and main.operator == '!':
+        #     main = zeros[i]
+        #     i += 1
         return self.find_with_state(main)
 
     def find_with_state(self, token: Token) -> Token:
