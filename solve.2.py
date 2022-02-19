@@ -1,3 +1,17 @@
+"""
+==================== VERSION 2 ====================
+Problems:
+    - Still not doable to trace every step taken
+    - The code is ok, but my understanding of propositional logic isn't enough to code the logic without errors
+    - The logic is hardcoded and not flexible enough
+    - Still too many workarounds
+
+To take to the next version:
+    - Improved parser
+    - New Premise and Token classes
+    - Adding steps in a procedural form
+"""
+
 from tokens import Token
 from typing import Union
 from xml.dom.expatbuilder import Rejecter
@@ -174,9 +188,18 @@ class Solver:
             return self.reject(target)
         else:
             debug.log(f"No operator found so target must be a literal")
+
+            neg = negate(target)
+            if self.level == 0 and "!" in target.get():
+                debug.log("Trying to prove a negation")
+                self.assume(neg, target)
+                self.remove_prove(neg)
+                found = self.prove(target)
+                if found:
+                    return self.resolve(target)
+                return self.reject(target)
             
             # Checking if the target is already proved or the target is a contradiction
-            neg = negate(target)
             for premise in self.stack[self.level].proved:
                 if premise == target:
                     debug.log(f"{target} is already proved!")
