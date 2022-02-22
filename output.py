@@ -1,6 +1,7 @@
 import argparse
 from enum import Enum
 from random import random
+import re
 import input
 import debug
 import math
@@ -37,38 +38,42 @@ class StepType(Enum):
     EN=8 # Elimination negation
     IA=9 # Introduction and
     EA=10 # Elimination and
-    
+    RI=11 # Reiteration
 
 class Step:
     # TODO: implement rule numbers for the steps, hashmap maybe??
-    def __init__(self, premise: 'Premise', type: StepType):
+    def __init__(self, premise: 'Premise', type: StepType, assumptions: list['Premise']=None):
+        self._premise = premise
         premise = str(premise).replace("[", "(").replace("]", ")").replace("'", "")
         self.premise = premise
         self._type = type
+        self._assumptions = assumptions
 
-    def type(self):
+    def get(self):
         if self._type == StepType.P:
-            return "A. "
+            return "[ass.]"
         elif self._type == StepType.A:
-            return "A. "
+            return "[ass.]"
         elif self._type == StepType.EI:
-            return "E→. "
+            return "[E→, "
         elif self._type == StepType.II:
-            return "I→. "
+            return "[I→, "
         elif self._type == StepType.CT:
-            return "I¬. "
+            return "[I¬, "
         elif self._type == StepType.IN:
-            return "I¬. "
+            return "[I¬, "
         elif self._type == StepType.EN:
-            return "E¬. " 
+            return "[E¬, " 
         elif self._type == StepType.IA:
-            return "I^. "
+            return "[I^, "
         elif self._type == StepType.EA:
-            return "E^. "
+            return "[E^, "
+        elif self._type == StepType.RI:
+            return f"[reit.,#{self._premise.id}]"
 
         return self._type
     def __repr__(self):
-        return f"{self.premise} {self.type()}"
+        return f"{self.premise} {self.get()}"
 
 
 class NaturalDeductionTree:
@@ -80,8 +85,14 @@ class NaturalDeductionTree:
     def add(self, step: Step):
         self.steps.append(step)
 
+    def get_premise(self, id: int, r: list[(str, 'Premise')]) -> 'Premise':
+        for i, (_, a) in enumerate(r):
+            print(a.id, id)
+            if a.id == id:
+                return i
+
     def close(self):
-        result: list[str] = []
+        result: list[(str, 'Premise')] = []
         r = str(random())
         level = 1
         line = 1
@@ -108,7 +119,15 @@ class NaturalDeductionTree:
 
             if step._type == StepType.CT:
                 premise = "⊥"
-            string = f"{lines}{' │ ' * level}{premise}{r}_{step.type()}\n"
+
+            raw_step = step.get()
+            while match := re.search(r"#(\d+)", raw_step):
+                id = match.group(1)
+                i = self.get_premise(int(id), result)
+                raw_step = raw_step[:match.start()]+str(i+1)+raw_step[match.end():]
+                break
+
+            string = f"{lines}{' │ ' * level}{premise}{r}_{raw_step}\n"
 
             # Open assumption so draw a line
             if step._type == StepType.A and i-1 >= 0 and self.steps[i-1]._type == StepType.OA:
@@ -121,15 +140,15 @@ class NaturalDeductionTree:
                 string += f"{max_prepend}{' │ ' * (level-1)} ├{'─'*(len(premise)+1)}\n"
 
 
-            result.append(string)
+            result.append((string, step._premise))
             line += 1
 
 
-        max_len = max([len(x.split("\n")[0]) for x in result])
+        max_len = max([len(x[0].split("\n")[0]) for x in result])
 
         p = self.statement+"\n\n"
 
-        for string in result:
+        for string, premise in result:
             s = string.split("\n")[0]
             l = len(s)
             l2 = len(s.split("_")[1])

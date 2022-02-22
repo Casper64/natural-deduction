@@ -1,9 +1,9 @@
 import output
-import solve
+from solve import init
 
 def main():
     output.display_start()
-    solve.init()
+    init()
 
 if __name__ == "__main__":
     main()
